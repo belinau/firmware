@@ -24,6 +24,7 @@
 #include "Sensor/CGRadSensSensor.h"
 #include "Sensor/RCWL9620Sensor.h"
 #include "Sensor/nullSensor.h"
+#include "Sensor/RAK12035.h" // Include the RAK12035 sensor header
 
 #if __has_include(<Adafruit_AHTX0.h>)
 #include "Sensor/AHT10.h"
@@ -171,6 +172,14 @@ PCT2075Sensor pct2075Sensor;
 NullSensor pct2075Sensor;
 #endif
 
+// --- ADDED: RAK12035 Sensor Instances for Multiplexer Ports J1, J2, J3 ---
+// Assuming 'Wire' is the global TwoWire instance for I2C communication.
+// The second parameter (0, 1, 2) corresponds to the multiplexer channel.
+RAK12035 rak12035_j1(Wire, 0); // Sensor on J1 (channel 0)
+RAK12035 rak12035_j2(Wire, 1); // Sensor on J2 (channel 1)
+RAK12035 rak12035_j3(Wire, 2); // Sensor on J3 (channel 2)
+// --- END ADDED RAK12035 Sensor Instances ---
+
 RCWL9620Sensor rcwl9620Sensor;
 CGRadSensSensor cgRadSens;
 #endif
@@ -282,10 +291,28 @@ int32_t EnvironmentTelemetryModule::runOnce()
                 result = cgRadSens.runOnce();
             if (pct2075Sensor.hasSensor())
                 result = pct2075Sensor.runOnce();
+
+            // --- ADDED: RAK12035 Sensor Initialization ---
+            // Initialize each RAK12035 sensor. hasSensor() checks if the I2C address is found
+            // on the specified multiplexer channel.
+            if (rak12035_j1.hasSensor()) {
+                rak12035_j1.init();
+                // Take the minimum poll interval, assuming RAK12035 might have one
+                result = min(result, rak12035_j1.getPollInterval());
+            }
+            if (rak12035_j2.hasSensor()) {
+                rak12035_j2.init();
+                result = min(result, rak12035_j2.getPollInterval());
+            }
+            if (rak12035_j3.hasSensor()) {
+                rak12035_j3.init();
+                result = min(result, rak12035_j3.getPollInterval());
+            }
+            // --- END ADDED RAK12035 Sensor Initialization ---
+
                 // this only works on the wismesh hub with the solar option. This is not an I2C sensor, so we don't need the
                 // sensormap here.
 #ifdef HAS_RAKPROT
-
             result = rak9154Sensor.runOnce();
 #endif
 #endif
@@ -609,6 +636,23 @@ bool EnvironmentTelemetryModule::getEnvironmentTelemetry(meshtastic_Telemetry *m
             m->variant.environment_metrics.has_relative_humidity = m_ahtx.variant.environment_metrics.has_relative_humidity;
         }
     }
+    // --- ADDED: RAK12035 Sensor Data Collection ---
+    // Read metrics from each RAK12035 sensor and populate the telemetry struct.
+    // The getMetrics function in RAK12035.cpp will only update temperature and humidity
+    // if these fields haven't already been set by a higher-priority sensor.
+    if (rak12035_j1.hasSensor()) {
+        valid = valid && rak12035_j1.getMetrics(m);
+        hasSensor = true;
+    }
+    if (rak12035_j2.hasSensor()) {
+        valid = valid && rak12035_j2.getMetrics(m);
+        hasSensor = true;
+    }
+    if (rak12035_j3.hasSensor()) {
+        valid = valid && rak12035_j3.getMetrics(m);
+        hasSensor = true;
+    }
+    // --- END ADDED RAK12035 Sensor Data Collection ---
     if (max17048Sensor.hasSensor()) {
         valid = valid && max17048Sensor.getMetrics(m);
         hasSensor = true;
@@ -845,13 +889,41 @@ AdminMessageHandleResult EnvironmentTelemetryModule::handleAdminMessageForModule
         if (result != AdminMessageHandleResult::NOT_HANDLED)
             return result;
     }
+    // --- ADDED: RAK12035 Admin Message Handling ---
+    // This allows for future admin messages to be directed to your RAK12035 sensors,
+    // though the current RAK12035 driver does not implement specific admin messages.
+    if (rak12035_j1.hasSensor()) {
+        result = rak12035_j1.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    if (rak12035_j2.hasSensor()) {
+        result = rak12035_j2.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    if (rak12035_j3.hasSensor()) {
+        result = rak12035_j3.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    // --- END ADDED RAK12035 Admin Message Handling ---
     if (cgRadSens.hasSensor()) {
         result = cgRadSens.handleAdminMessage(mp, request, response);
         if (result != AdminMessageHandleResult::NOT_HANDLED)
             return result;
     }
+    if (pct2075Sensor.hasSensor()) {
+        result = pct2075Sensor.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+#ifdef HAS_RAKPROT
+    result = rak9154Sensor.handleAdminMessage(mp, request, response);
+    if (result != AdminMessageHandleResult::NOT_HANDLED)
+        return result;
+#endif
 #endif
     return result;
 }
 
-#endif
