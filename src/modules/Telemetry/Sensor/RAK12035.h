@@ -3,7 +3,7 @@
     // Only compile for nRF52-based boards like the RAK4631
     #if defined(ARCH_NRF52) && !defined(ARDUINO_NANO_RP2040_CONNECT)
 
-    #include "I2CSensor.h"
+    #include "../I2CSensor.h"
     #include "../mesh/generated/meshtastic/telemetry.pb.h" // Needed for meshtastic_Telemetry struct
 
     // RAK12035 default I2C Address and Registers
