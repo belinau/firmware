@@ -172,13 +172,13 @@ PCT2075Sensor pct2075Sensor;
 NullSensor pct2075Sensor;
 #endif
 
-// --- ADDED: RAK12035 Sensor Instances for Multiplexer Ports J1, J2, J3 ---
-// Assuming 'Wire' is the global TwoWire instance for I2C communication.
-// The second parameter (0, 1, 2) corresponds to the multiplexer channel.
-RAK12035 rak12035_j1(0); // Sensor on J1 (channel 0)
-RAK12035 rak12035_j2(1); // Sensor on J2 (channel 1)
-RAK12035 rak12035_j3(2); // Sensor on J3 (channel 2)
-// --- END ADDED RAK12035 Sensor Instances ---
+// --- CORRECTED SENSOR SETUP ---
+// This block replaces your old multiplexer logic with the correct logic
+// for three uniquely addressed I2C sensors.
+RAK12035 soilSensor1(0x21); // Sensor for J1 with address 0x21
+RAK12035 soilSensor2(0x22); // Sensor on J2 with address 0x22
+RAK12035 soilSensor3(0x23); // Sensor on J3 with address 0x23
+// --- END CORRECTED SENSOR SETUP ---
 
 RCWL9620Sensor rcwl9620Sensor;
 CGRadSensSensor cgRadSens;
@@ -292,23 +292,12 @@ int32_t EnvironmentTelemetryModule::runOnce()
             if (pct2075Sensor.hasSensor())
                 result = pct2075Sensor.runOnce();
 
-            // --- ADDED: RAK12035 Sensor Initialization ---
-            // Initialize each RAK12035 sensor. hasSensor() checks if the I2C address is found
-            // on the specified multiplexer channel.
-            if (rak12035_j1.hasSensor()) {
-                rak12035_j1.init();
-                // Take the minimum poll interval, assuming RAK12035 might have one
-                result = min(result, rak12035_j1.getPollInterval());
-            }
-            if (rak12035_j2.hasSensor()) {
-                rak12035_j2.init();
-                result = min(result, rak12035_j2.getPollInterval());
-            }
-            if (rak12035_j3.hasSensor()) {
-                rak12035_j3.init();
-                result = min(result, rak12035_j3.getPollInterval());
-            }
-            // --- END ADDED RAK12035 Sensor Initialization ---
+            // --- CORRECTED SENSOR INITIALIZATION ---
+            // This replaces your old initialization block for the incorrect sensors
+            soilSensor1.init();
+            soilSensor2.init();
+            soilSensor3.init();
+            // --- END CORRECTED SENSOR INITIALIZATION ---
 
                 // this only works on the wismesh hub with the solar option. This is not an I2C sensor, so we don't need the
                 // sensormap here.
@@ -354,7 +343,6 @@ bool EnvironmentTelemetryModule::wantUIFrame()
 {
     return moduleConfig.telemetry.environment_screen_enabled;
 }
-
 void EnvironmentTelemetryModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
 {
     display->setTextAlignment(TEXT_ALIGN_LEFT);
@@ -403,14 +391,19 @@ void EnvironmentTelemetryModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiSt
             "Press: " + String(lastMeasurement.variant.environment_metrics.barometric_pressure, 0) + "hPA";
     }
 
-    if (lastMeasurement.variant.environment_metrics.voltage != 0) {
-        sensorData[sensorCount++] = "Volt/Cur: " + String(lastMeasurement.variant.environment_metrics.voltage, 0) + "V / " +
-                                    String(lastMeasurement.variant.environment_metrics.current, 0) + "mA";
+    // CORRECTED DISPLAY LOGIC
+    // This new logic displays our soil sensor data using their re-purposed fields,
+    // while preserving the original Volt/Cur/IAQ display logic for other sensors.
+    if (lastMeasurement.variant.environment_metrics.has_voltage) {
+        sensorData[sensorCount++] = "Soil 1: " + String(lastMeasurement.variant.environment_metrics.voltage, 1) + "%";
     }
-
-    if (lastMeasurement.variant.environment_metrics.iaq != 0) {
-        sensorData[sensorCount++] = "IAQ: " + String(lastMeasurement.variant.environment_metrics.iaq);
+    if (lastMeasurement.variant.environment_metrics.has_current) {
+        sensorData[sensorCount++] = "Soil 2: " + String(lastMeasurement.variant.environment_metrics.current, 1) + "%";
     }
+    if (lastMeasurement.variant.environment_metrics.has_iaq) {
+        sensorData[sensorCount++] = "Soil 3: " + String(lastMeasurement.variant.environment_metrics.iaq) + "%";
+    }
+    // END CORRECTED DISPLAY LOGIC
 
     if (lastMeasurement.variant.environment_metrics.distance != 0) {
         sensorData[sensorCount++] = "Water Level: " + String(lastMeasurement.variant.environment_metrics.distance, 0) + "mm";
@@ -454,7 +447,7 @@ void EnvironmentTelemetryModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiSt
     }
 
     // Only scroll if there are more than 3 sensor data lines
-    if (sensorCount > 3) {
+    if (sensorCount > maxLines) {
         // Update scroll offset every 5 seconds
         if (millis() - lastScrollTime > 5000) {
             if (scrollingDown) {
@@ -636,23 +629,22 @@ bool EnvironmentTelemetryModule::getEnvironmentTelemetry(meshtastic_Telemetry *m
             m->variant.environment_metrics.has_relative_humidity = m_ahtx.variant.environment_metrics.has_relative_humidity;
         }
     }
-    // --- ADDED: RAK12035 Sensor Data Collection ---
-    // Read metrics from each RAK12035 sensor and populate the telemetry struct.
-    // The getMetrics function in RAK12035.cpp will only update temperature and humidity
-    // if these fields haven't already been set by a higher-priority sensor.
-    if (rak12035_j1.hasSensor()) {
-        valid = valid && rak12035_j1.getMetrics(m);
+    // --- CORRECTED SENSOR DATA COLLECTION ---
+    // This block calls getMetrics for each of our soil sensors.
+    // The getMetrics function will populate the correct fields based on I2C address.
+    if (soilSensor1.hasSensor()) {
+        valid = valid && soilSensor1.getMetrics(m);
         hasSensor = true;
     }
-    if (rak12035_j2.hasSensor()) {
-        valid = valid && rak12035_j2.getMetrics(m);
+    if (soilSensor2.hasSensor()) {
+        valid = valid && soilSensor2.getMetrics(m);
         hasSensor = true;
     }
-    if (rak12035_j3.hasSensor()) {
-        valid = valid && rak12035_j3.getMetrics(m);
+    if (soilSensor3.hasSensor()) {
+        valid = valid && soilSensor3.getMetrics(m);
         hasSensor = true;
     }
-    // --- END ADDED RAK12035 Sensor Data Collection ---
+    // --- END CORRECTED SENSOR DATA COLLECTION ---
     if (max17048Sensor.hasSensor()) {
         valid = valid && max17048Sensor.getMetrics(m);
         hasSensor = true;
@@ -889,25 +881,24 @@ AdminMessageHandleResult EnvironmentTelemetryModule::handleAdminMessageForModule
         if (result != AdminMessageHandleResult::NOT_HANDLED)
             return result;
     }
-    // --- ADDED: RAK12035 Admin Message Handling ---
-    // This allows for future admin messages to be directed to your RAK12035 sensors,
-    // though the current RAK12035 driver does not implement specific admin messages.
-    //if (rak12035_j1.hasSensor()) {
-   //    result = rak12035_j1.handleAdminMessage(mp, request, response);
-    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
-    //        return result;
-   // }
-    //if (rak12035_j2.hasSensor()) {
-    //    result = rak12035_j2.handleAdminMessage(mp, request, response);
-    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
-    //        return result;
-    //}
-    //if (rak12035_j3.hasSensor()) {
-    //    result = rak12035_j3.handleAdminMessage(mp, request, response);
-    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
-    //        return result;
-    //}
-    // --- END ADDED RAK12035 Admin Message Handling ---
+     // --- CORRECTED: RAK12035 Admin Message Handling ---
+    // This allows admin messages to be directed to your RAK12035 sensors.
+    if (soilSensor1.hasSensor()) {
+        result = soilSensor1.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    if (soilSensor2.hasSensor()) {
+        result = soilSensor2.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    if (soilSensor3.hasSensor()) {
+        result = soilSensor3.handleAdminMessage(mp, request, response);
+        if (result != AdminMessageHandleResult::NOT_HANDLED)
+            return result;
+    }
+    // --- END CORRECTED RAK12035 Admin Message Handling ---
     if (cgRadSens.hasSensor()) {
         result = cgRadSens.handleAdminMessage(mp, request, response);
         if (result != AdminMessageHandleResult::NOT_HANDLED)

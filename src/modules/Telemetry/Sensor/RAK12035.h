@@ -15,7 +15,7 @@ struct RAK12035_Data {
 
 class RAK12035 : public TelemetrySensor, public I2CSensor {
 public:
-    RAK12035(uint8_t mux_channel, TwoWire &wire = Wire);
+    RAK12035(uint8_t address, TwoWire &wire = Wire); // It now takes an I2C address
 
     void init() override;
     void setup() override;
@@ -28,5 +28,5 @@ private:
     bool read(RAK12035_Data &data);
 
     bool isDetected = false;
-    uint8_t _mux_channel;
+// uint8_t _mux_channel; // No longer needed
 };
