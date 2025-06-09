@@ -1,0 +1,17 @@
+{
+    "name": "RAK12035_SoilMoisture",
+    "keywords": "Soil, Capacitance, Moisture, Temperature",
+    "authors": {
+        "name": "Bernd Giesecke",
+        "email": "bernd.giesecke@rakwireless.com",
+        "url": "https://github.com/rakwireless/RAK12035_SoilMoisture"
+    },
+    "description": "Provide access to all functions of the RAKwireless RAK12023/RAK12035 Soil Moisture Sensor",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rakwireless/RAK12035_SoilMoisture.git"
+    },
+    "frameworks": "arduino",
+    "platforms": "*",
+    "version": "1.0.4"
+}

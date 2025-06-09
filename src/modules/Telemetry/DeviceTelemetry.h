@@ -4,7 +4,8 @@
 #include "ProtobufModule.h"
 #include <OLEDDisplay.h>
 #include <OLEDDisplayUi.h>
-#include "Sensor/RAK12035.h"
+// Corrected path for RAK12035.h
+#include "Sensor/RAK12035.h" // This is a local include relative to DeviceTelemetry.h
 #include <Adafruit_TCA9548A.h>
 
 class DeviceTelemetryModule : private concurrency::OSThread, public ProtobufModule<meshtastic_Telemetry>

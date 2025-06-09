@@ -1,0 +1,11 @@
+RAK12035	KEYWORD1
+begin	KEYWORD2
+get_sensor_version	KEYWORD2
+get_sensor_moisture	KEYWORD2
+get_sensor_temperature	KEYWORD2
+get_sensor_addr	KEYWORD2
+set_sensor_addr	KEYWORD2
+sensor_on	KEYWORD2
+sensor_sleep	KEYWORD2
+set_dry_cal	KEYWORD2
+set_wet_cal	KEYWORD2

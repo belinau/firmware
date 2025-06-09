@@ -1,6 +1,6 @@
-#include "RAK12035.h"
-#include "MeshService.h" // For LOG_INFO, LOG_WARN macros
-#include <Wire.h>        // Explicitly include Wire.h for I2C communication
+#include "RAK12035.h" // Now includes our renamed adapter class header (MeshtasticRAK12035Sensor)
+#include "MeshService.h" // For Meshtastic LOG_INFO, LOG_WARN macros
+#include <Wire.h>        // Required for I2C communication (Wire object)
 #include <Arduino.h>     // For pinMode, digitalWrite, delay
 
 // --- RAK WisBlock specific power pin. IMPORTANT: Ensure WB_IO2 is defined in your
@@ -8,151 +8,153 @@
 // --- If your board uses a different pin for sensor power, you'll need to
 // --- change WB_IO2 to the correct GPIO number.
 #ifndef WB_IO2
-#define WB_IO2 17 // Common default for RAK4631 WisBlock IO2
+#define WB_IO2 17 // Common default for RAK4631 WisBlock IO2, verify for your board
 #endif
 
-// The constructor now takes the unique I2C address of the sensor (0x21, 0x22, or 0x23)
-// and passes it directly to the I2CSensor base class.
-RAK12035::RAK12035(uint8_t address, TwoWire &wire) :
-    TelemetrySensor(meshtastic_TelemetrySensorType_SENSOR_UNSET, "SoilSensor"), // Initialize base class
-    I2CSensor(address, wire) // Pass the unique sensor address to the I2CSensor base class
+// Constructor for our renamed adapter class
+MeshtasticRAK12035Sensor::MeshtasticRAK12035Sensor(uint8_t address, TwoWire &wire) :
+    TelemetrySensor(meshtastic_TelemetrySensorType_SENSOR_UNSET, "SoilSensor"), // Initialize Meshtastic TelemetrySensor base
+    I2CSensor(address, wire), // Initialize Meshtastic I2CSensor base with the sensor's unique I2C address
+    _rakSensor(address) // Corrected: Initialize the official RAK12035 object with its I2C address
 {
-    // The 'address' member variable inherited from I2CSensor now holds the unique address (0x21, 0x22, or 0x23)
+    // The 'address' member inherited from I2CSensor (this->address) now holds the unique address (0x21, 0x22, or 0x23).
+    // The _rakSensor object is also configured with this address internally.
 }
 
-// init() is required by the base class.
-void RAK12035::init() {
-    setup(); // Simply call setup() for initialization logic
+// init() is required by the Meshtastic TelemetrySensor base class.
+void MeshtasticRAK12035Sensor::init() {
+    setup(); // Simply call setup() for initialization logic.
 }
 
-// setup() is where the sensor is initialized and detected.
-// This function now includes explicit power-on and a robust I2C probe.
-// It uses the global 'Wire' object for I2C communication to resolve the '_wire' scope error.
-void RAK12035::setup() {
-    LOG_INFO("RAK12035::setup() called for address 0x%02X", this->address);
+// setup() is where the sensor hardware is initialized and its presence/readiness is confirmed.
+// This function now uses the official RAK12035 library's 'begin()' method.
+void MeshtasticRAK12035Sensor::setup() {
+    LOG_INFO("MeshtasticRAK12035Sensor::setup() called for address 0x%02X", this->address);
 
-    // --- Step 1: Power ON the sensor module via WB_IO2 (if applicable for your board) ---
+    // --- Step 1: Power ON the sensor module via WB_IO2 ---
     // This is crucial for many RAK WisBlock sensor modules.
     pinMode(WB_IO2, OUTPUT);
     digitalWrite(WB_IO2, HIGH); // Set WB_IO2 high to power on the sensor slot
     delay(100); // Give some time for the sensor to power up and stabilize
 
-    // --- Step 2: Initialize the I2C bus ---
-    // Ensure the I2C bus is initialized before attempting communication.
-    // This calls Wire.begin() on the global I2C object, which is typically done once globally.
-    // Including it here ensures it's done if not handled elsewhere, and multiple calls are harmless.
-    Wire.begin(); // FIX: Use global 'Wire' object directly
+    // --- Step 2: Initialize the global I2C bus ---
+    // Meshtastic usually handles this globally, but calling Wire.begin() here ensures it's ready.
+    // Multiple calls to Wire.begin() are harmless.
+    Wire.begin();
     delay(10); // Short delay after Wire.begin()
 
-    // --- Step 3: Perform a robust I2C device presence check ---
-    // This explicitly attempts to start communication with the sensor's address
-    // and checks if it acknowledges.
-    Wire.beginTransmission(this->address); // FIX: Use global 'Wire' object directly
-    byte error = Wire.endTransmission();   // FIX: Use global 'Wire' object directly
+    // --- Step 3: Check for I2C device presence (initial acknowledge check) ---
+    // This confirms the sensor is physically present and responds to its I2C address.
+    Wire.beginTransmission(this->address);
+    byte error = Wire.endTransmission();
 
-    if (error == 0) { // Error code 0 means success (device acknowledged its address)
-        isDetected = true;
+    if (error == 0) { // Device acknowledged its address on I2C bus
+        _isDetected = true; // Sensor is physically present
         LOG_INFO("Soil Sensor detected and acknowledged I2C address 0x%02X (Wire.endTransmission success)", this->address);
-        // Optional: Perform a sensor-specific check if needed, e.g., reading a version register.
-    } else {
-        isDetected = false;
+
+        // --- Step 4: Initialize the RAK12035 library instance ---
+        // The begin() method in the RAK library handles the sensor's specific initialization,
+        // including sending the AHT20 initialization command and internal calibration.
+        // The 'false' argument means it won't block while waiting for the sensor to be ready.
+        _rakSensor.begin(false); // Removed 'if' condition as begin() returns void
+        
+        // Assume initialization success if detected and begin() is called.
+        // Actual status should be checked by attempting to read data, or by checking
+        // the library's internal status flags if available, but for now we set it true
+        // and rely on hasSensor() and getMetrics() to confirm success.
+        _isInitialized = true; 
+
+        // Optionally read version to confirm full functionality (as per RAK example)
+        uint8_t version = 0;
+        if (_rakSensor.get_sensor_version(&version)) {
+            LOG_INFO("MeshtasticRAK12035Sensor::setup() sensor 0x%02X version: 0x%02X", this->address, version);
+        } else {
+            LOG_WARN("MeshtasticRAK12035Sensor::setup() sensor 0x%02X failed to get version after init.", this->address);
+            _isInitialized = false; // Set to false if version read fails, indicates true initialization failure
+        }
+
+    } else { // Sensor not detected at its I2C address (Wire.endTransmission failed)
+        _isDetected = false;
+        _isInitialized = false; // Cannot initialize if not detected
         LOG_WARN("Soil Sensor NOT detected at I2C address 0x%02X, Wire.endTransmission returned error code: %d", this->address, error);
-        // Common I2C error codes from Wire.endTransmission():
-        // 0: success
-        // 1: data too long to fit in transmit buffer
-        // 2: received NACK on transmit of address (device not found at address)
-        // 3: received NACK on transmit of data
-        // 4: other error
-        // 5: timeout
     }
 }
 
-// hasSensor() is required by the base class.
-// Returns true if the sensor was detected during setup.
-bool RAK12035::hasSensor() {
-    return isDetected;
+// hasSensor() is required by the Meshtastic TelemetrySensor base class.
+// Returns true if the sensor was both physically detected AND successfully initialized by its library in setup().
+bool MeshtasticRAK12035Sensor::hasSensor() {
+    return _isDetected && _isInitialized; // Both flags must be true for the sensor to be considered ready
 }
 
-// getMetrics() is where we read the data from the sensor and populate the telemetry packet.
-bool RAK12035::getMetrics(meshtastic_Telemetry *m) {
-    if (!hasSensor()) return false; // If sensor not detected, don't try to read
+// getMetrics() is where we read the data from the sensor and populate the Meshtastic telemetry packet.
+// This function now uses the official RAK12035 library's data reading methods.
+bool MeshtasticRAK12035Sensor::getMetrics(meshtastic_Telemetry *m) {
+    if (!hasSensor()) { // Check if sensor is both detected AND initialized
+        LOG_WARN("MeshtasticRAK12035Sensor::getMetrics() called for 0x%02X but sensor not available (detected=%d, initialized=%d). Skipping data read.",
+                 this->address, _isDetected, _isInitialized);
+        return false; // Cannot get metrics if sensor is not ready
+    }
 
-    LOG_INFO("RAK12035::getMetrics() called for address 0x%02X", this->address); // Debug log
+    LOG_INFO("MeshtasticRAK12035Sensor::getMetrics() called for address 0x%02X", this->address);
 
-    RAK12035_Data data;
-    if (read(data)) { // Attempt to read data from the sensor
-        // Use the unique sensor's I2C address (this->address) to decide
-        // which specific telemetry field to populate. This ensures each
-        // soil sensor populates a distinct field in the Meshtastic telemetry packet.
+    uint16_t temperature_raw = 0;
+    uint16_t capacitance_raw = 0;
+    uint8_t moisture_pct = 0;
+    bool success_readings = true; // Flag to track if all readings were successful
+
+    // Attempt to read data using the official library's functions.
+    // The library's functions handle the low-level I2C commands, polling, and status checks.
+    if (!_rakSensor.get_sensor_temperature(&temperature_raw)) {
+        LOG_WARN("MeshtasticRAK12035Sensor::getMetrics() failed to read temperature from 0x%02X", this->address);
+        success_readings = false;
+    }
+    if (!_rakSensor.get_sensor_capacitance(&capacitance_raw)) {
+        LOG_WARN("MeshtasticRAK12035Sensor::getMetrics() failed to read capacitance from 0x%02X", this->address);
+        success_readings = false;
+    }
+    if (!_rakSensor.get_sensor_moisture(&moisture_pct)) {
+        LOG_WARN("MeshtasticRAK12035Sensor::getMetrics() failed to read moisture percentage from 0x%02X", this->address);
+        success_readings = false;
+    }
+
+    if (success_readings) { // Only proceed if all readings were successful
+        float temp_c = temperature_raw / 10.0F;
+        
+        // Use the unique sensor's I2C address (this->address) to map the read data
+        // to specific Meshtastic telemetry fields (voltage, current, IAQ).
+        // This allows each of your three sensors to send distinct data.
         switch (this->address) {
-            case 0x21: // For the RAK12035 at address 0x21 (Soil Sensor 1)
-                // Map soil moisture (humidity from RAK12035_Data) to the 'voltage' field.
-                m->variant.environment_metrics.voltage = data.humidity;
+            case 0x21: // For the RAK12035 at address 0x21 (mapped to Soil Sensor 1)
+                m->variant.environment_metrics.voltage = (float)moisture_pct; // Soil moisture percentage in voltage field
                 m->variant.environment_metrics.has_voltage = true;
-                // Also, set the overall temperature from the first soil sensor.
-                // Note: Only one temperature field is available in meshtastic_Telemetry,
-                // so subsequent temperature sensors would overwrite this.
-                m->variant.environment_metrics.temperature = data.temperature;
+                // Set overall temperature from the first sensor only (Meshtastic has one temp field).
+                m->variant.environment_metrics.temperature = temp_c;
                 m->variant.environment_metrics.has_temperature = true;
+                LOG_INFO("MeshtasticRAK12035_0x21: T=%.2fC, M=%.0f%% (Cap=%u)", temp_c, (float)moisture_pct, capacitance_raw);
                 break;
-            case 0x22: // For the RAK12035 at address 0x22 (Soil Sensor 2)
-                // Map soil moisture to the 'current' field.
-                m->variant.environment_metrics.current = data.humidity;
+            case 0x22: // For the RAK12035 at address 0x22 (mapped to Soil Sensor 2)
+                m->variant.environment_metrics.current = (float)moisture_pct; // Soil moisture percentage in current field
                 m->variant.environment_metrics.has_current = true;
+                LOG_INFO("MeshtasticRAK12035_0x22: T=%.2fC, M=%.0f%% (Cap=%u)", temp_c, (float)moisture_pct, capacitance_raw);
                 break;
-            case 0x23: // For the RAK12035 at address 0x23 (Soil Sensor 3)
-                // Map soil moisture to the 'iaq' (Indoor Air Quality) field.
-                // Note: IAQ is a uint32_t, so we cast the float humidity.
-                m->variant.environment_metrics.iaq = (uint32_t)data.humidity;
+            case 0x23: // For the RAK12035 at address 0x23 (mapped to Soil Sensor 3)
+                m->variant.environment_metrics.iaq = (uint32_t)moisture_pct; // Soil moisture percentage in IAQ field (as uint32_t)
                 m->variant.environment_metrics.has_iaq = true;
+                LOG_INFO("MeshtasticRAK12035_0x23: T=%.2fC, M=%.0f%% (Cap=%u)", temp_c, (float)moisture_pct, capacitance_raw);
                 break;
             default:
-                // Log a warning if an unexpected sensor address tries to get metrics
-                LOG_WARN("Soil Sensor: Unknown or unhandled sensor address 0x%02X in getMetrics", this->address);
-                return false; // Indicate failure to get metrics for this unknown address
+                LOG_WARN("Soil Sensor: Unknown or unhandled sensor address 0x%02X in getMetrics, skipping data mapping.", this->address);
+                return false;
         }
         return true; // Indicate success in getting and populating metrics
     }
-    return false; // Indicate failure to read data from sensor
+    return false; // Indicate failure to read all data using library functions
 }
 
-// runOnce() is required by the base class but doesn't need to do anything for this sensor
-// as data reading is triggered by getMetrics().
-int32_t RAK12035::runOnce() {
-    return 0; // Return 0 to indicate no specific action needed on its own thread loop
-}
-
-// A private function to handle the low-level I2C communication and data parsing.
-// This function sends commands to and reads data from the RAK12035 sensor at its specific I2C address.
-bool RAK12035::read(RAK12035_Data &data) {
-    LOG_INFO("RAK12035::read() called for address 0x%02X", this->address); // Debug log
-
-    // AHT20 (commonly used in RAK12035) command for measurement
-    uint8_t cmd[3] = {0xAC, 0x33, 0x00};
-    
-    // Send command to the sensor at its unique address (this->address, e.g., 0x21, 0x22, 0x23)
-    if (!writeBytes(this->address, cmd, 3)) {
-      LOG_WARN("Soil Sensor: Failed to send command to 0x%02X (writeBytes)", this->address);
-      return false;
-    }
-    delay(80); // Wait for measurement to complete (AHT20 requires approx. 75ms)
-
-    uint8_t raw_data[6]; // Buffer to store raw sensor data (6 bytes for AHT20)
-    // Read data from the sensor at its unique address
-    if (!readBytes(this->address, raw_data, 6)) {
-        LOG_WARN("Soil Sensor: Failed to read data from 0x%02X (readBytes)", this->address);
-        return false;
-    }
-    
-    // Convert raw 24-bit data for humidity and temperature according to AHT20 datasheet.
-    // Humidity conversion: raw data to percentage
-    uint32_t raw_humidity = ((uint32_t)raw_data[1] << 12) | ((uint32_t)raw_data[2] << 4) | ((raw_data[3] >> 4) & 0x0F);
-    data.humidity = (raw_humidity / (float)0x100000) * 100.0; // Max raw value 0x100000 = 1048576
-
-    // Temperature conversion: raw data to Celsius
-    uint32_t raw_temp = (((uint32_t)raw_data[3] & 0x0F) << 16) | ((uint32_t)raw_data[4] << 8) | raw_data[5];
-    data.temperature = ((raw_temp / (float)0x100000) * 200.0) - 50.0; // Max raw value 0x100000 = 1048576
-    
-    LOG_INFO("RAK12035::read() success for 0x%02X: Temp=%.2f, Hum=%.2f", this->address, data.temperature, data.humidity);
-    return true; // Indicate successful data read and parsing
+// runOnce() is required by the Meshtastic TelemetrySensor base class.
+// For this sensor, actual data reading is triggered by getMetrics() when the
+// EnvironmentTelemetryModule's main loop decides it's time to send telemetry.
+int32_t MeshtasticRAK12035Sensor::runOnce() {
+    return 0; // Return 0 to indicate no specific action needed on its own thread loop.
+              // The main Meshtastic loop will call getMetrics periodically based on EnvTelModule's scheduling.
 }
