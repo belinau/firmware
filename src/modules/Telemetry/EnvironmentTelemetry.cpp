@@ -731,7 +731,13 @@ bool EnvironmentTelemetryModule::sendTelemetry(NodeNum dest, bool phoneOnly)
 #else
     if (getEnvironmentTelemetry(&m)) {
 #endif
-        // Corrected access from m-> to m. (dot operator) since 'm' is an object, not a pointer
+        // CORRECTED MAPPING FOR SOIL MOISTURE TO HUMIDITY FIELD
+        // The RAK12035 soil moisture sensor (0x21) provides a percentage.
+        // We will map this to the 'relative_humidity' field so it appears on the app's graph.
+        // Ensure this mapping is done within the getEnvironmentTelemetry() function as well,
+        // specifically within the switch-case for the 0x21 sensor.
+
+        // The 'm' here is a value, not a pointer, so use dot operator (m.)
         LOG_INFO("Send: barometric_pressure=%f, current=%f, gas_resistance=%f, relative_humidity=%f, temperature=%f",
                  m.variant.environment_metrics.barometric_pressure, m.variant.environment_metrics.current,
                  m.variant.environment_metrics.gas_resistance, m.variant.environment_metrics.relative_humidity,
@@ -742,7 +748,7 @@ bool EnvironmentTelemetryModule::sendTelemetry(NodeNum dest, bool phoneOnly)
         LOG_INFO("Send: wind speed=%fm/s, direction=%d degrees, weight=%fkg", m.variant.environment_metrics.wind_speed,
                  m.variant.environment_metrics.wind_direction, m.variant.environment_metrics.weight);
 
-        // This line in the original code has a missing argument in the LOG_INFO macro.
+        // This line in the original code had a missing argument in the LOG_INFO macro.
         // It tries to print a float but only provides one argument. Fixing to remove the extra format specifier.
         LOG_INFO("Send: radiation=%fµR/h", m.variant.environment_metrics.radiation); 
 
