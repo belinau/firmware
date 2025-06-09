@@ -662,6 +662,13 @@ bool EnvironmentTelemetryModule::getEnvironmentTelemetry(meshtastic_Telemetry *m
     hasSensor = true;
 #endif
 #endif
+    LOG_INFO("EnvTel: valid=%d, hasSensor=%d. Soil1(V):%f, Soil2(C):%f, Soil3(IAQ):%d, Temp:%f",
+             valid, hasSensor,
+             m->variant.environment_metrics.voltage,
+             m->variant.environment_metrics.current,
+             m->variant.environment_metrics.iaq,
+             m->variant.environment_metrics.temperature);
+
     return valid && hasSensor;
 }
 

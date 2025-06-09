@@ -5,8 +5,10 @@
 #include "I2CSensor.h"
 #include "TelemetrySensor.h"
 #include "meshtastic/telemetry.pb.h"
+#include <Wire.h> // Include Wire.h for TwoWire reference
 
-#define RAK12035_I2C_ADDR 0x38
+#define RAK12035_I2C_ADDR 0x38 // This is the default AHT20 address, but your sensors use 0x21, 0x22, 0x23 directly.
+                               // This constant is no longer used in the class logic, but kept for reference.
 
 struct RAK12035_Data {
     float temperature;
@@ -15,7 +17,8 @@ struct RAK12035_Data {
 
 class RAK12035 : public TelemetrySensor, public I2CSensor {
 public:
-    RAK12035(uint8_t address, TwoWire &wire = Wire); // It now takes an I2C address
+    // Constructor now accepts the unique I2C address for each RAK12035 sensor (e.g., 0x21, 0x22, 0x23)
+    RAK12035(uint8_t address, TwoWire &wire = Wire);
 
     void init() override;
     void setup() override;
@@ -25,8 +28,8 @@ public:
     bool hasSensor() override;
 
 private:
+    // Private function to read raw data from the sensor
     bool read(RAK12035_Data &data);
 
-    bool isDetected = false;
-// uint8_t _mux_channel; // No longer needed
+    bool isDetected = false; // Flag to indicate if the sensor was detected during setup
 };
