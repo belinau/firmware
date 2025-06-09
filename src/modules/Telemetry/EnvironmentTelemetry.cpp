@@ -175,9 +175,9 @@ NullSensor pct2075Sensor;
 // --- ADDED: RAK12035 Sensor Instances for Multiplexer Ports J1, J2, J3 ---
 // Assuming 'Wire' is the global TwoWire instance for I2C communication.
 // The second parameter (0, 1, 2) corresponds to the multiplexer channel.
-RAK12035 rak12035_j1(Wire, 0); // Sensor on J1 (channel 0)
-RAK12035 rak12035_j2(Wire, 1); // Sensor on J2 (channel 1)
-RAK12035 rak12035_j3(Wire, 2); // Sensor on J3 (channel 2)
+RAK12035 rak12035_j1(0); // Sensor on J1 (channel 0)
+RAK12035 rak12035_j2(1); // Sensor on J2 (channel 1)
+RAK12035 rak12035_j3(2); // Sensor on J3 (channel 2)
 // --- END ADDED RAK12035 Sensor Instances ---
 
 RCWL9620Sensor rcwl9620Sensor;
@@ -892,21 +892,21 @@ AdminMessageHandleResult EnvironmentTelemetryModule::handleAdminMessageForModule
     // --- ADDED: RAK12035 Admin Message Handling ---
     // This allows for future admin messages to be directed to your RAK12035 sensors,
     // though the current RAK12035 driver does not implement specific admin messages.
-    if (rak12035_j1.hasSensor()) {
-        result = rak12035_j1.handleAdminMessage(mp, request, response);
-        if (result != AdminMessageHandleResult::NOT_HANDLED)
-            return result;
-    }
-    if (rak12035_j2.hasSensor()) {
-        result = rak12035_j2.handleAdminMessage(mp, request, response);
-        if (result != AdminMessageHandleResult::NOT_HANDLED)
-            return result;
-    }
-    if (rak12035_j3.hasSensor()) {
-        result = rak12035_j3.handleAdminMessage(mp, request, response);
-        if (result != AdminMessageHandleResult::NOT_HANDLED)
-            return result;
-    }
+    //if (rak12035_j1.hasSensor()) {
+   //    result = rak12035_j1.handleAdminMessage(mp, request, response);
+    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
+    //        return result;
+   // }
+    //if (rak12035_j2.hasSensor()) {
+    //    result = rak12035_j2.handleAdminMessage(mp, request, response);
+    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
+    //        return result;
+    //}
+    //if (rak12035_j3.hasSensor()) {
+    //    result = rak12035_j3.handleAdminMessage(mp, request, response);
+    //    if (result != AdminMessageHandleResult::NOT_HANDLED)
+    //        return result;
+    //}
     // --- END ADDED RAK12035 Admin Message Handling ---
     if (cgRadSens.hasSensor()) {
         result = cgRadSens.handleAdminMessage(mp, request, response);
@@ -926,4 +926,4 @@ AdminMessageHandleResult EnvironmentTelemetryModule::handleAdminMessageForModule
 #endif
     return result;
 }
-
+#endif

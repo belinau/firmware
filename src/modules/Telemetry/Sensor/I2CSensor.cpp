@@ -1,5 +1,5 @@
     #include "I2CSensor.h"
-    #include "meshtastic/util.h" // Assuming this provides LOG_DEBUG, LOG_WARNING etc.
+    #include "MeshService.h"
 
     // Checks if the sensor responds on the I2C bus at its specified address
     bool I2CSensor::isPresent() {
@@ -12,13 +12,13 @@
         wire.beginTransmission(address);
         wire.write(reg);
         if (wire.endTransmission(false) != 0) { // Send restart, do not release bus
-            LOG_WARNING("I2C readBytes: Failed to begin transmission or write register.");
+            LOG_WARN("I2C readBytes: Failed to begin transmission or write register.");
             return false;
         }
 
         uint8_t bytesRead = wire.requestFrom(address, len);
         if (bytesRead != len) {
-            LOG_WARNING("I2C readBytes: Expected %d bytes, got %d.", len, bytesRead);
+            LOG_WARN("I2C readBytes: Expected %d bytes, got %d.", len, bytesRead);
             return false;
         }
 

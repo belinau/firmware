@@ -1,31 +1,32 @@
-    #pragma once
+#pragma once
 
-    // Only compile for nRF52-based boards like the RAK4631
-    #if defined(ARCH_NRF52) && !defined(ARDUINO_NANO_RP2040_CONNECT)
+// NOTE: Removed the #if defined(ARCH_NRF52) wrapper which was causing the build failure.
 
-    #include "../I2CSensor.h"
-    #include "../mesh/generated/meshtastic/telemetry.pb.h" // Needed for meshtastic_Telemetry struct
+#include "I2CSensor.h"
+#include "TelemetrySensor.h"
+#include "meshtastic/telemetry.pb.h"
 
-    // RAK12035 default I2C Address and Registers
-    #define RAK12035_I2C_ADDR 0x78
-    #define RAK12035_REG_DATA 0x00 // Register to read both temp & humidity
+#define RAK12035_I2C_ADDR 0x38
 
-    // A structure to hold the sensor readings
-    struct RAK12035_Data {
+struct RAK12035_Data {
     float temperature;
     float humidity;
-    };
+};
 
-    class RAK12035 : public I2CSensor {
-    public:
-    // Constructor
-    RAK12035(TwoWire &wire, uint8_t variant) : I2CSensor(RAK12035_I2C_ADDR, wire, variant) {}
+class RAK12035 : public TelemetrySensor, public I2CSensor {
+public:
+    RAK12035(uint8_t mux_channel, TwoWire &wire = Wire);
 
-    // Standard sensor functions
     void init() override;
-    bool read(RAK12035_Data &data); // Custom read function for this sensor
-    bool getMetrics(meshtastic_Telemetry *m); // New function to populate telemetry struct
-    };
-
-    #endif
+    void setup() override;
+    int32_t runOnce() override;
     
+    bool getMetrics(meshtastic_Telemetry *m) override;
+    bool hasSensor() override;
+
+private:
+    bool read(RAK12035_Data &data);
+
+    bool isDetected = false;
+    uint8_t _mux_channel;
+};
