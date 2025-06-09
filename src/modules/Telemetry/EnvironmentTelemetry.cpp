@@ -199,7 +199,19 @@ IndicatorSensor indicatorSensor;
 
 int32_t EnvironmentTelemetryModule::runOnce()
 {
+    LOG_INFO("EnvTelModule: runOnce() called. firstTime=%d", firstTime); // Log when runOnce starts
+    LOG_INFO("EnvTelModule: Config check -> measurement_enabled=%d, screen_enabled=%d, ENABLE_MACRO=%d",
+             moduleConfig.telemetry.environment_measurement_enabled,
+             moduleConfig.telemetry.environment_screen_enabled,
+             ENVIRONMENTAL_TELEMETRY_MODULE_ENABLE);
+
     if (sleepOnNextExecution == true) {
+        sleepOnNextExecution = false;
+        uint32_t nightyNightMs = Default::getConfiguredOrDefaultMs(moduleConfig.telemetry.environment_update_interval,
+                                                                   default_telemetry_broadcast_interval_secs);
+        LOG_DEBUG("Sleep for %ims, then awake to send metrics again", nightyNightMs);
+        doDeepSleep(nightyNightMs, true, false);
+    } if (sleepOnNextExecution == true) {
         sleepOnNextExecution = false;
         uint32_t nightyNightMs = Default::getConfiguredOrDefaultMs(moduleConfig.telemetry.environment_update_interval,
                                                                    default_telemetry_broadcast_interval_secs);
@@ -213,9 +225,9 @@ int32_t EnvironmentTelemetryModule::runOnce()
         without having to configure it from the PythonAPI or WebUI.
     */
 
-    // moduleConfig.telemetry.environment_measurement_enabled = 1;
-    // moduleConfig.telemetry.environment_screen_enabled = 1;
-    // moduleConfig.telemetry.environment_update_interval = 15;
+        moduleConfig.telemetry.environment_measurement_enabled = 1; // Force enable measurement
+        moduleConfig.telemetry.environment_screen_enabled = 0;      // Keep screen off as device has no screen
+        moduleConfig.telemetry.environment_update_interval = 15;    // Set to 15 seconds for testing
 
     if (!(moduleConfig.telemetry.environment_measurement_enabled || moduleConfig.telemetry.environment_screen_enabled ||
           ENVIRONMENTAL_TELEMETRY_MODULE_ENABLE)) {
