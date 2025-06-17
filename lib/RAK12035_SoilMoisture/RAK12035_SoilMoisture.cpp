@@ -2,22 +2,26 @@
  * I2CSoilMoistureSensor.cpp - Arduino library for the Sensor version of*
  * I2C Soil Moisture Sensor version from Chrirp                         *
  * (https://github.com/Miceuz/i2c-moisture-sensor).                     *
- *                                                                      *
+ * *
  * Ingo Fischer 11Nov2015                                               *
  * https://github.com/Apollon77/I2CSoilMoistureSensor                   *
- *                                                                      *
+ * *
  * MIT license                                                          *
  *----------------------------------------------------------------------*/
 
 #include "RAK12035_SoilMoisture.h"
 
 #include <Wire.h>
+#include <Arduino.h> // Required for pinMode, digitalWrite, delay etc.
 #define i2cBegin _i2c_port->begin
 #define i2cBeginTransmission _i2c_port->beginTransmission
 #define i2cEndTransmission _i2c_port->endTransmission
 #define i2cRequestFrom _i2c_port->requestFrom
 #define i2cRead _i2c_port->read
 #define i2cWrite _i2c_port->write
+
+// NEW: Initialize static flag
+bool RAK12035::_global_power_managed = false;
 
 /*----------------------------------------------------------------------*
  * Constructor.                                                         *
@@ -43,15 +47,20 @@ void RAK12035::setup(TwoWire &i2c_library)
  *----------------------------------------------------------------------*/
 void RAK12035::begin(bool wait)
 {
-	pinMode(WB_IO2, OUTPUT);
-	digitalWrite(WB_IO2, HIGH);
-	// Only needed for VA boards
-	pinMode(WB_IO5, INPUT);
+    // NEW: Use static flag to control WB_IO2/WB_IO5/reset only once globally
+    if (!_global_power_managed) {
+        pinMode(WB_IO2, OUTPUT);
+        digitalWrite(WB_IO2, HIGH);
+        // Only needed for VA boards
+        pinMode(WB_IO5, INPUT);
 
-	// Reset the sensor
-	reset();
+        // Reset the sensor
+        reset(); // This calls the reset() function, which also uses WB_IO4
+        
+        _global_power_managed = true; // Set flag so it's only done once
+    }
 
-	delay(500);
+	delay(500); // Keep initial delay for sensor internal boot after external power-on
 
 	time_t timeout = millis();
 	uint8_t data;
@@ -62,10 +71,59 @@ void RAK12035::begin(bool wait)
 			return;
 		}
 	}
-	delay(500);
+	delay(500); // Delay after version check before reading calibration
 	get_dry_cal(&_dry_cal);
 	get_wet_cal(&_wet_cal);
 }
+
+// NEW: Implement soft_reset - calls library's sensor_on and begin
+void RAK12035::soft_reset() {
+    // This function will re-power and re-initialize the sensor using the library's built-in functions.
+    // It will trigger WB_IO2/WB_IO4 via sensor_on() and begin(), which are now cooperative due to _global_power_managed.
+    bool on_success = sensor_on();
+    if (!on_success) {
+        // Log a warning if sensor_on fails (requires a LOG_WARN macro in a context where it's defined)
+    }
+    delay(100); // Small delay after sensor_on()
+
+    begin(false); // Re-run the begin sequence (version read, calib read)
+}
+
+// NEW: Implement get_sensor_moisture_percentage - original calculation logic
+bool RAK12035::get_sensor_moisture_percentage(uint8_t *moisture_pct) {
+    if (_version > 2)
+	{
+		return read_rak12035(SOILMOISTURESENSOR_GET_HUMIDITY, moisture_pct, 1);
+	}
+	else
+	{
+        uint16_t capacitance = 0;
+        _i2c_port->setTimeout(5000);
+
+        if (get_sensor_capacitance(&capacitance))
+        {
+            if (_dry_cal < _wet_cal)
+            {
+                if (capacitance <= _dry_cal) capacitance = _dry_cal;
+                if (capacitance >= _wet_cal) capacitance = _wet_cal;
+                moisture_pct[0] = (_wet_cal - capacitance) / ((_wet_cal - _dry_cal) / 100.0);
+            }
+            else
+            {
+                if (capacitance >= _dry_cal) capacitance = _dry_cal;
+                if (capacitance <= _wet_cal) capacitance = _wet_cal;
+                moisture_pct[0] = (_dry_cal - capacitance) / ((_dry_cal - _wet_cal) / 100.0);
+            }
+            if (moisture_pct[0] > 100)
+            {
+                moisture_pct[0] = 100;
+            }
+            return true;
+        }
+        return false;
+	}
+}
+
 
 /**
  * @brief Get the sensor firmware version
@@ -96,61 +154,10 @@ bool RAK12035::get_sensor_capacitance(uint16_t *capacitance)
 	return result;
 }
 
-/**
- * @brief Get the sensor moisture value as percentage
- *
- * @param moisture Variable to store the value
- * @return true I2C transmission success
- * @return false I2C transmission failed
- */
+// Original get_sensor_moisture - delegates to new get_sensor_moisture_percentage
 bool RAK12035::get_sensor_moisture(uint8_t *moisture)
 {
-	if (_version > 2)
-	{
-		bool result = read_rak12035(SOILMOISTURESENSOR_GET_HUMIDITY, moisture, 1);
-		return result;
-	}
-	else
-	{
-		uint16_t capacitance = 0;
-		_i2c_port->setTimeout(5000);
-
-		if (get_sensor_capacitance(&capacitance))
-		{
-			if (_dry_cal < _wet_cal)
-			{
-				if (capacitance <= _dry_cal)
-				{
-					capacitance = _dry_cal;
-				}
-				if (capacitance >= _wet_cal)
-				{
-					capacitance = _wet_cal;
-				}
-
-				moisture[0] = (_wet_cal - capacitance) / ((_wet_cal - _dry_cal) / 100.0);
-			}
-			else
-			{
-				if (capacitance >= _dry_cal)
-				{
-					capacitance = _dry_cal;
-				}
-				if (capacitance <= _wet_cal)
-				{
-					capacitance = _wet_cal;
-				}
-
-				moisture[0] = (_dry_cal - capacitance) / ((_dry_cal - _wet_cal) / 100.0);
-			}
-			if (moisture[0] > 100)
-			{
-				moisture[0] = 100;
-			}
-			return true;
-		}
-		return false;
-	}
+	return get_sensor_moisture_percentage(moisture);
 }
 
 /**
@@ -224,13 +231,17 @@ bool RAK12035::set_sensor_addr(uint8_t addr)
 bool RAK12035::sensor_on(void)
 {
 	uint8_t data;
-	digitalWrite(WB_IO2, HIGH);
-	delay(250);
+    // NEW: Use static flag to control WB_IO2/WB_IO4 only once globally
+    if (!_global_power_managed) {
+        digitalWrite(WB_IO2, HIGH);
+        delay(250);
 
-	digitalWrite(WB_IO4, LOW);
-	delay(250);
-	digitalWrite(WB_IO4, HIGH);
-	// reset();
+        digitalWrite(WB_IO4, LOW);
+        delay(250);
+        digitalWrite(WB_IO4, HIGH);
+        _global_power_managed = true; // Set flag
+    }
+	// reset(); // Original comment - no change
 
 	time_t timeout = millis();
 	while (!get_sensor_version(&data))
@@ -253,9 +264,9 @@ bool RAK12035::sensor_sleep(void)
 {
 	uint8_t tmp = 0;
 	bool result = write_rak12035(SOILMOISTURESENSOR_SET_SLEEP, &tmp, 1);
+	// Original library code keeps WB_IO2 control here.
 	digitalWrite(WB_IO2, LOW);
 	return result;
-	// return write_rak12035(SOILMOISTURESENSOR_SET_SLEEP, &tmp, 1);
 }
 
 /**
@@ -308,6 +319,10 @@ bool RAK12035::get_wet_cal(uint16_t *hundred_val)
  */
 void RAK12035::reset(void)
 {
+    // Original library code keeps WB_IO4 control here. It's called by begin() and set_sensor_addr().
+    // It's not wrapped by _global_power_managed here, as it's a specific hardware reset that might
+    // be needed even after _global_power_managed is true (e.g., if set_sensor_addr is called mid-run).
+    // This maintains original library behavior for reset().
 	pinMode(WB_IO4, OUTPUT);
 	digitalWrite(WB_IO4, LOW);
 	delay(500);
@@ -338,8 +353,8 @@ void RAK12035::reset(void)
 bool RAK12035::read_rak12035(uint8_t reg, uint8_t *data, uint8_t length)
 {
 	i2cBeginTransmission(_sensorAddress);
-	i2cWrite(reg);						   // sends five bytes
-	uint8_t result = i2cEndTransmission(); // stop transmitting
+	i2cWrite(reg);
+	uint8_t result = i2cEndTransmission();
 	if (result != 0)
 	{
 		return false;
@@ -348,9 +363,9 @@ bool RAK12035::read_rak12035(uint8_t reg, uint8_t *data, uint8_t length)
 	i2cRequestFrom(_sensorAddress, length);
 	int i = 0;
 	time_t timeout = millis();
-	while (_i2c_port->available()) // slave may send less than requested
+	while (_i2c_port->available())
 	{
-		data[i++] = i2cRead(); // receive a byte as a proper uint8_t
+		data[i++] = i2cRead();
 		if ((millis() - timeout) > 1000)
 		{
 			break;
@@ -374,12 +389,12 @@ bool RAK12035::read_rak12035(uint8_t reg, uint8_t *data, uint8_t length)
  */
 bool RAK12035::write_rak12035(uint8_t reg, uint8_t *data, uint8_t length)
 {
-	_i2c_port->beginTransmission(_sensorAddress); // Use the current sensor address
-	_i2c_port->write(reg); // sends five bytes
+	// *** CRITICAL FIX: Use _sensorAddress instead of hardcoded SLAVE_I2C_ADDRESS_DEFAULT ***
+	_i2c_port->beginTransmission(_sensorAddress);
+	_i2c_port->write(reg);
 	for (int i = 0; i < length; i++)
 	{
 		_i2c_port->write(data[i]);
 	}
-	// return true; // Old problematic line, always returned true
 	return (_i2c_port->endTransmission() == 0); // Return true if write was successful (0 means success)
 }

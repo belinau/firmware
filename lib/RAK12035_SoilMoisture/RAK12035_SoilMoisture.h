@@ -4,28 +4,15 @@
  * @brief Header file for Class RAK12035
  * @version 0.1
  * @date 2021-11-20
- * * @copyright Copyright (c) 2021
- * */
+ *
+ * @copyright Copyright (c) 2021
+ *
+ */
 #ifndef I2CSOILMOISTURESENSOR_H
 #define I2CSOILMOISTURESENSOR_H
 
 #include <Arduino.h>
 #include <Wire.h>
-
-// --- RAK WisBlock specific power and control pins for the sensor ---
-// These definitions are crucial for the RAK12035_SoilMoisture.cpp file
-// to correctly control the sensor's power and reset lines.
-// They are defined here to ensure availability when this header is included.
-#ifndef WB_IO2
-#define WB_IO2 17 // Common default for RAK4631 WisBlock IO2, used for sensor power
-#endif
-#ifndef WB_IO4
-#define WB_IO4 21 // Common default for RAK4631 WisBlock IO4, often used for sensor reset/control
-#endif
-#ifndef WB_IO5
-#define WB_IO5 33 // Common default for RAK4631 WisBlock IO5, sometimes used for sensor functionality
-#endif
-// --- END WB_IOx Definitions ---
 
 #define SLAVE_I2C_ADDRESS_DEFAULT 0x20
 //Soil Moisture Sensor Register Addresses
@@ -41,6 +28,19 @@
 #define SOILMOISTURESENSOR_GET_HUMIDITY_FULL 0x0A // (r)   2 bytes
 #define SOILMOISTURESENSOR_GET_HUMIDITY_ZERO 0x0B // (r)   2 bytes
 
+// Standard WisBlock IO pins used by RAK12023 for RAK12035
+// These are included here for the library's internal use.
+#ifndef WB_IO2
+#define WB_IO2 17 // For 3V3_S power control
+#endif
+#ifndef WB_IO4
+#define WB_IO4 21 // For sensor reset line
+#endif
+#ifndef WB_IO5
+#define WB_IO5 26 // Only needed for VA boards (not directly controlled in this code)
+#endif
+
+
 class RAK12035
 {
 public:
@@ -50,7 +50,7 @@ public:
 	void begin(bool wait = true);
 	bool get_sensor_version(uint8_t *version);
 	bool get_sensor_capacitance(uint16_t *capacitance);
-	bool get_sensor_moisture(uint8_t *moisture);
+	bool get_sensor_moisture(uint8_t *moisture); // Original public method
 	bool get_sensor_temperature(uint16_t *temperature);
 	uint8_t get_sensor_addr(void);
 	bool set_sensor_addr(uint8_t addr);
@@ -63,6 +63,11 @@ public:
 	bool get_wet_cal(uint16_t *hundred_val);
 	void reset(void);
 
+	// NEW: Public methods for soft reset and raw moisture percentage calculation
+	void soft_reset(); // Triggers a soft reset sequence using I2C commands/delays
+	bool get_sensor_moisture_percentage(uint8_t *moisture_pct); // Gets the calculated percentage
+
+
 private:
 	int _sensorAddress = SLAVE_I2C_ADDRESS_DEFAULT;
 	uint16_t _dry_cal = 590;
@@ -71,6 +76,8 @@ private:
 	bool read_rak12035(uint8_t reg, uint8_t *data, uint8_t length);
 	bool write_rak12035(uint8_t reg, uint8_t *data, uint8_t length);
 	TwoWire *_i2c_port = &Wire;
-};
 
+    // NEW: Static flag for global power management
+    static bool _global_power_managed; // Declared in header
+};
 #endif
