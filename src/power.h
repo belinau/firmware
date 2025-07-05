@@ -30,6 +30,13 @@
 #define OCV_ARRAY 4300, 4240, 4120, 4000, 3888, 3800, 3740, 3698, 3655, 3580, 3400
 #elif defined(HELTEC_MESH_POCKET_BATTERY_10000)
 #define OCV_ARRAY 4100, 4060, 3960, 3840, 3729, 3625, 3550, 3500, 3420, 3345, 3100
+// --- NEW SECTION FOR SAFT LS17500 (Li-SOCl2) ---
+#elif defined(CELL_TYPE_SAFT_LS17500)
+// Points: 100%, 90%, 80%, 70%, 60%, 50%, 40%, 30%, 20%, 10%, 0% (in millivolts)
+// Li-SOCl2 has a very flat discharge curve, then a sharp drop.
+// This array reflects that:
+#define OCV_ARRAY 3660, 3650, 3640, 3630, 3620, 3610, 3550, 3400, 3250, 3150, 3000
+// --- END NEW SECTION ---
 #else // LiIon
 #define OCV_ARRAY 4190, 4050, 3990, 3890, 3800, 3720, 3630, 3530, 3420, 3300, 3100
 #endif
