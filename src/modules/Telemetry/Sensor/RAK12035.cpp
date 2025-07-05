@@ -1,5 +1,5 @@
-#include "Sensor/RAK12035.h"
-#include "meshtastic/util.h"
+#include "RAK12035.h"
+#include "meshUtils.h"
 
 #if defined(ARCH_NRF52) && !defined(ARDUINO_NANO_RP2040_CONNECT)
 
@@ -11,7 +11,7 @@ void RAK12035::init() {
     LOG_INFO("RAK12035 Soil Moisture Sensor found.");
     isDetected = true;
   } else {
-    LOG_WARNING("RAK12035 Soil Moisture Sensor not found on this MUX channel!");
+    LOG_WARN("RAK12035 Soil Moisture Sensor not found on this MUX channel!");
     isDetected = false;
   }
 }
@@ -40,7 +40,7 @@ bool RAK12035::read(RAK12035_Data &data) {
     LOG_DEBUG("RAK12035 Reading: Temp=%.2f C, Hum=%.2f %%RH", data.temperature, data.humidity);
     return true;
   } else {
-    LOG_WARNING("Failed to read from RAK12035 sensor.");
+    LOG_WARN("Failed to read from RAK12035 sensor.");
     return false;
   }
 }

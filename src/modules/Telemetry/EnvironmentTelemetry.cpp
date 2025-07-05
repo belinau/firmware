@@ -298,15 +298,15 @@ int32_t EnvironmentTelemetryModule::runOnce()
             if (rak12035_j1.hasSensor()) {
                 rak12035_j1.init();
                 // Take the minimum poll interval, assuming RAK12035 might have one
-                result = min(result, rak12035_j1.getPollInterval());
+                result = min(result, static_cast<uint32_t>(rak12035_j1.getPollInterval()));
             }
             if (rak12035_j2.hasSensor()) {
                 rak12035_j2.init();
-                result = min(result, rak12035_j2.getPollInterval());
+                result = min(result, static_cast<uint32_t>(rak12035_j2.getPollInterval()));
             }
             if (rak12035_j3.hasSensor()) {
                 rak12035_j3.init();
-                result = min(result, rak12035_j3.getPollInterval());
+                result = min(result, static_cast<uint32_t>(rak12035_j3.getPollInterval()));
             }
             // --- END ADDED RAK12035 Sensor Initialization ---
 
@@ -926,4 +926,4 @@ AdminMessageHandleResult EnvironmentTelemetryModule::handleAdminMessageForModule
 #endif
     return result;
 }
-
+#endif // !MESHTASTIC_EXCLUDE_ENVIRONMENTAL_SENSOR

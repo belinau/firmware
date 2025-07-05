@@ -787,15 +787,14 @@ void Power::readPowerStatus()
         mqtt->pubSub.publish(wifiTopic.c_str(), wifiString.c_str(), false);
     }
 #endif
-
 #endif
 
+    // SAFT BATTERY PROTECTION: Skip low-voltage shutdown for non-rechargeable batteries
+#ifndef USE_NON_RECHARGEABLE_BATTERY
     // If we have a battery at all and it is less than 0%, force deep sleep if we have more than 10 low readings in
     // a row. NOTE: min LiIon/LiPo voltage is 2.0 to 2.5V, current OCV min is set to 3100 that is large enough.
-    //
-
     if (batteryLevel && powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
-        if (batteryLevel->getBattVoltage() < OCV[NUM_OCV_POINTS - 1]) {
+        if (batteryLevel->getBattVoltage() < (OCV[NUM_OCV_POINTS - 1]* NUM_CELLS)) {
             low_voltage_counter++;
             LOG_DEBUG("Low voltage counter: %d/10", low_voltage_counter);
             if (low_voltage_counter > 10) {
@@ -811,8 +810,8 @@ void Power::readPowerStatus()
             low_voltage_counter = 0;
         }
     }
-}
-
+#endif
+}  
 int32_t Power::runOnce()
 {
     readPowerStatus();
